@@ -1,0 +1,18 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments stuff
+.env
+.venv
+/env
+/venv
+
+# s'more 
+*.db
+*.db-journal
+*.sqbpro
+*.DS_Store
+launch.json
+urls.txt
