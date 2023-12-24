@@ -26,15 +26,25 @@ class CuppyDatabase:
         except sqlite3.Error as e:
             print(f"Error executing query: {e}")
 
-    def fetch_data(self, query):
+    def fetch_data(self, query, data=()):
         try:
             cursor = self.connection.cursor()
-            cursor.execute(query)
+            cursor.execute(query, data)
             rows = cursor.fetchall()
             return rows
         except sqlite3.Error as e:
             print(f"Error fetching data: {e}")
             return []
+        
+    def fetch_one(self, query, data=()):
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(query, data)
+            row = cursor.fetchone()
+            return row
+        except sqlite3.Error as e:
+            print(f"Error fetching data: {e}")
+            return None
 
 if __name__ == "__main__":
     
@@ -51,19 +61,15 @@ if __name__ == "__main__":
         success_count INTEGER
     """
 
-    create_urls_table_query = """
-    CREATE TABLE IF NOT EXISTS urls (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        url TEXT NOT NULL,
+    create_urls_table_query = """CREATE TABLE urls 
+       (id INTEGER PRIMARY KEY AUTOINCREMENT,
+        url TEXT NOT NULL UNIQUE,
         status_code INTEGER NOT NULL,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
         title TEXT,
         canonical_url_header TEXT,
         canonical_url_html TEXT,
-        og_url TEXT      
-        CONSTRAINT unique_url UNIQUE (url)
-
-    );
+        og_url TEXT )
     """
     db.execute_query(create_urls_table_query)
 
