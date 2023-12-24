@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 import requests
 from html.parser import HTMLParser
 from cuppydb import CuppyDatabase
+from robotsparser import RobotsTxtParser
 
 
 class MyHTMLParser(HTMLParser):
@@ -40,7 +41,7 @@ class MyHTMLParser(HTMLParser):
 
 class CanonicalUrlParser:
     """Class to parse a list of URLs and extract canonical URL from headers and/or HTML content"""
-    def __init__(self, urls: list[str]):
+    def __init__(self, urls: list[str], robotstxt: bool = False):
 
         self.urls = urls
         self.url = None
@@ -56,6 +57,8 @@ class CanonicalUrlParser:
         self.db.connect()
         self.success_count = 0
         self.run_id = None
+        self.robotstxt = robotstxt
+        self.user_agent = os.environ.get("USER_AGENT", "CUPPy/0.1")
 
     def reset(self):
         """Reset all attributes to None"""
@@ -69,7 +72,8 @@ class CanonicalUrlParser:
   
 
     def parse(self):
-        """Parse all URLs in list"""
+        """Parse all URLs in list
+        """
         
         for url in self.urls:
             self.url = url
@@ -82,13 +86,23 @@ class CanonicalUrlParser:
         self.get_webpage()
         if self.status_code == requests.codes.ok:
             self.get_canonical_from_headers()
-            self.get_canonical_url_from_html()
+            self.get_canonical_and_og_from_html()
         
        
     def get_webpage(self):
         """Get webpage and store status code, content and headers"""
         print(f"Getting webpage: {self.url}")
-        headers = {'user-agent': os.environ.get("USER_AGENT", "CUPPy/0.1")}
+        
+        headers = {'user-agent': self.user_agent}
+        if self.robotstxt:
+            #robots_url = RobotsTxtParser.robots_location(self.url)
+            rp = RobotsTxtParser(self.db)
+            if rp.can_fetch(self.url, '*'):
+                print(f"Success: robots.txt allows {self.url}")               
+            else:
+                print(f"Error: robots.txt disallows {self.url}")
+                self.reset()
+                return
         try:
             r = requests.get(self.url, headers=headers)
             self.status_code = r.status_code
@@ -149,6 +163,7 @@ class CanonicalUrlParser:
                 self.canonical_url_from_html,
                 self.og_url,
                 self.status_code,
+                self.title,
                 self.canonical_url_from_headers,
                 self.canonical_url_from_html,
                 self.og_url,
@@ -175,12 +190,12 @@ def is_valid_url(url: str) -> bool:
         return False
     
     
-def main(url_file: str):
+def main(url_file: str, robotstxt: bool = False):
     """Main function
     :param url_file: file containing URLs, one per line
     """
     urls = get_urls_from_file(url_file)
-    cup  = CanonicalUrlParser(urls)
+    cup  = CanonicalUrlParser(urls, robotstxt=robotstxt)
     cup.parse()
 
     return 0
@@ -189,7 +204,8 @@ if __name__ == "__main__":
 
     argparser = argparse.ArgumentParser(description="Parse URLs and extract canonical URL from headers and/or HTML content")
     argparser.add_argument("url_file"
-                           , help="File containing URLs, one per line."
-                           )
+                           , help="File containing URLs, one per line.")
+    argparser.add_argument("-r", "--robotstxt", action="store_true"
+                           , help="Check robots.txt before parsing URL")
     args = argparser.parse_args()
-    sys.exit(main(args.url_file))
+    sys.exit(main(args.url_file, robotstxt=args.robotstxt))
