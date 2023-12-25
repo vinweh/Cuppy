@@ -69,16 +69,29 @@ if __name__ == "__main__":
         title TEXT,
         canonical_url_header TEXT,
         canonical_url_html TEXT,
-        og_url TEXT )
+        og_url TEXT,
+        og_title TEXT)
     """
     db.execute_query(create_urls_table_query)
 
     insert_data_query = """
-    INSERT INTO urls (url, status_code, timestamp, canonical_url_header, canonical_url_html)
-     VALUES ("https://www.google.com", 200, CURRENT_TIMESTAMP, "https://www.google.com", "https://www.google.com")
+    INSERT INTO urls (
+         url
+        ,status_code
+        ,timestamp
+        ,title
+        ,canonical_url_header
+        ,canonical_url_html
+        ,og_url
+        ,og_title
+        )
+     VALUES ("https://www.google.com", 200, CURRENT_TIMESTAMP, "Google", 
+     NULL, "https://www.google.com", NULL, NULL)
       ON CONFLICT(url) DO UPDATE 
-     SET status_code=?, timestamp=CURRENT_TIMESTAMP, canonical_url_header=?, canonical_url_html=?;"""
-    data = (200, "https://www.google.com", "https://www.google.com")
+     SET status_code=?, timestamp=CURRENT_TIMESTAMP, title=?, canonical_url_header=?, canonical_url_html=?;"""
+    
+    data = (200, "Google", "https://www.google.com", "https://www.google.com")
+    
     db.execute_query(insert_data_query, data=data)
 
     select_data_query = """
