@@ -80,6 +80,7 @@ class CanonicalUrlParser:
         self.og_title = None
         self.og_url = None
         self.status_code = None
+        self.html_parser = MyHTMLParser()
   
 
     def parse(self):
@@ -105,7 +106,7 @@ class CanonicalUrlParser:
         """Get webpage and store status code, content and headers"""
         print(f"Getting webpage: {self.url}")
         
-        headers = {'user-agent': self.user_agent}
+        headers = {'user-agent': self.user_agent, 'Accept' : 'text/html'}
         if self.robotstxt:
             rp = RobotsTxtParser(self.db)
             if rp.can_fetch(self.url, '*'):
@@ -150,7 +151,6 @@ class CanonicalUrlParser:
             self.title = self.html_parser.title
             self.og_url = self.html_parser.og_url
         else:
-           
             print(f"Error: no HTML content")
     
     def write_results_to_database(self):
@@ -190,6 +190,7 @@ class CanonicalUrlParser:
         else:
             # to do error table 
             print(f"Error: status code {self.status_code}")
+            self.reset()
         
         
 def get_urls_from_file(filename: str) -> list[str]:
