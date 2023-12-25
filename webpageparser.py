@@ -13,7 +13,9 @@ class MyHTMLParser(HTMLParser):
         super().__init__()
         self.canonical_url = None
         self.og_url = None
+        self.og_title = None
         self.in_title = False
+        self.in_head = False
         self.title = None
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
@@ -25,16 +27,23 @@ class MyHTMLParser(HTMLParser):
             attrs_dict = dict(attrs)
             if attrs_dict.get("property") == "og:url":
                 self.og_url = attrs_dict.get("content")
+            if attrs_dict.get("name") == "og:title":
+                self.og_title = attrs_dict.get("content")    
+
+        if tag == "head":
+            self.in_head = True
 
         if tag == "title":
             self.in_title = True
 
     def handle_endtag(self, tag: str) -> None:
+        if tag == "head":
+            self.in_head = False
         if tag == "title":
             self.in_title = False
 
     def handle_data(self, data: str) -> None:
-        if self.in_title:
+        if self.in_title and self.in_head:
             self.title = data
             print(f"Title: {self.title}")     
       
@@ -51,6 +60,7 @@ class CanonicalUrlParser:
         self.headers = None
         self.title = None
         self.og_url = None
+        self.og_title = None
         self.canonical_url_from_headers = None
         self.canonical_url_from_html = None
         self.db = CuppyDatabase("cuppy-dev.db")
@@ -67,6 +77,7 @@ class CanonicalUrlParser:
         self.title = None
         self.canonical_url_from_headers = None
         self.canonical_url_from_html = None
+        self.og_title = None
         self.og_url = None
         self.status_code = None
   
@@ -85,6 +96,7 @@ class CanonicalUrlParser:
         """Parse a single URL"""
         self.get_webpage()
         if self.status_code == requests.codes.ok:
+
             self.get_canonical_from_headers()
             self.get_canonical_and_og_from_html()
         
@@ -95,7 +107,6 @@ class CanonicalUrlParser:
         
         headers = {'user-agent': self.user_agent}
         if self.robotstxt:
-            #robots_url = RobotsTxtParser.robots_location(self.url)
             rp = RobotsTxtParser(self.db)
             if rp.can_fetch(self.url, '*'):
                 print(f"Success: robots.txt allows {self.url}")               
@@ -136,7 +147,10 @@ class CanonicalUrlParser:
                 self.canonical_url_from_html = self.html_parser.canonical_url
             if self.html_parser.og_url:
                 self.og_url = self.html_parser.og_url    
+            self.title = self.html_parser.title
+            self.og_url = self.html_parser.og_url
         else:
+           
             print(f"Error: no HTML content")
     
     def write_results_to_database(self):
@@ -144,15 +158,16 @@ class CanonicalUrlParser:
         if self.status_code == requests.codes.ok: #for now
             insert_data_query = """
             INSERT INTO urls (url, status_code, timestamp, title, canonical_url_header
-            , canonical_url_html, og_url)
-            VALUES (?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?)
+            , canonical_url_html, og_url, og_title)
+            VALUES (?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?)
             ON CONFLICT(url) DO UPDATE SET 
                 status_code = ?,
                 timestamp = CURRENT_TIMESTAMP,
                 title = ?,
                 canonical_url_header = ?,
                 canonical_url_html = ?,
-                og_url = ?
+                og_url = ?,
+                og_title = ?
             WHERE url = ?;
             """
             data = (
@@ -162,11 +177,13 @@ class CanonicalUrlParser:
                 self.canonical_url_from_headers,
                 self.canonical_url_from_html,
                 self.og_url,
+                self.og_title,
                 self.status_code,
                 self.title,
                 self.canonical_url_from_headers,
                 self.canonical_url_from_html,
                 self.og_url,
+                self.og_title,
                 self.url
             )
             self.db.execute_query(insert_data_query, data)
@@ -197,7 +214,6 @@ def main(url_file: str, robotstxt: bool = False):
     urls = get_urls_from_file(url_file)
     cup  = CanonicalUrlParser(urls, robotstxt=robotstxt)
     cup.parse()
-
     return 0
 
 if __name__ == "__main__":
