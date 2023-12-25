@@ -52,18 +52,11 @@ if __name__ == "__main__":
     db = CuppyDatabase("cuppy-dev.db")
     db.connect()
 
-    create_runs_table_query = """
-    CREATE TABLE IF NOT EXISTS runs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        start_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-        end_time DATETIME,
-        url_count INTEGER,
-        success_count INTEGER
-    """
 
     create_urls_table_query = """CREATE TABLE urls 
        (id INTEGER PRIMARY KEY AUTOINCREMENT,
         url TEXT NOT NULL UNIQUE,
+        etag TEXT,
         status_code INTEGER NOT NULL,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
         title TEXT,
@@ -77,6 +70,7 @@ if __name__ == "__main__":
     insert_data_query = """
     INSERT INTO urls (
          url
+        ,etag 
         ,status_code
         ,timestamp
         ,title
@@ -85,12 +79,12 @@ if __name__ == "__main__":
         ,og_url
         ,og_title
         )
-     VALUES ("https://www.google.com", 200, CURRENT_TIMESTAMP, "Google", 
+     VALUES ("https://www.google.com", NULL, 200, CURRENT_TIMESTAMP, "Google", 
      NULL, "https://www.google.com", NULL, NULL)
       ON CONFLICT(url) DO UPDATE 
-     SET status_code=?, timestamp=CURRENT_TIMESTAMP, title=?, canonical_url_header=?, canonical_url_html=?;"""
+     SET etag=?, status_code=?, timestamp=CURRENT_TIMESTAMP, title=?, canonical_url_header=?, canonical_url_html=?;"""
     
-    data = (200, "Google", "https://www.google.com", "https://www.google.com")
+    data = ("33a64df551425fcc55e4d42a148795d9f25f89d4", 200, "Google", "https://www.google.com", "https://www.google.com")
     
     db.execute_query(insert_data_query, data=data)
 
@@ -100,9 +94,6 @@ if __name__ == "__main__":
     data = db.fetch_data(select_data_query)
     print(data)
 
-    select_data_query = """
-    SELECT * FROM runs;
-    """
     data = db.fetch_data(select_data_query)
     print(data)
 
