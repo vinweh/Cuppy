@@ -1,7 +1,9 @@
 from urllib.parse import urlparse
+import urllib.request
 from contextlib import closing
-from customrobotsparser import CustomRobotParser
+
 from cuppydb import CuppyDatabase
+from protego import Protego
 
 
 class RobotsTxtCache:
@@ -56,14 +58,7 @@ class RobotsTxtCache:
         self.db.execute_query(upsert_query, (url, content, content, url))
         
 class RobotsTxtParser:
-    """Encapsulates a robots.txt parser. Note that this
-    is a wrapper around the standard library robotparser, which
-    interprets robots.txt rules differently than e.g. Googlebot 
-    or Bingbot. Specifically, the standard library parser does not
-    support the Allow directive in the same way as Googlebot or Bingbot.
-    A first-found Disallow: rule wins over a later Allow: rule.
-
-    There are better parsers out there, such as reppy by (Seo)Moz or Portego (#TODO)
+    """Encapsulates a robots.txt parser
     """
     def __init__(self, cache_db_conn):
         """
@@ -72,7 +67,8 @@ class RobotsTxtParser:
         Parameters:
         - cache_db_conn: The connection to the CuppyDatabase object representing the cache database.
         """
-        self.parser = CustomRobotParser()
+        self._parser = None
+        self.robots_content = None
         self.robot_cache = RobotsTxtCache(cache_db_conn)
         
     def read_from_cache(self, url):
@@ -87,6 +83,25 @@ class RobotsTxtParser:
         - The content of the robots.txt file if found in the cache, None otherwise.
         """
         return self.robot_cache.get(url)
+    
+    def read_from_url(self, url):
+        """Read robots.txt from URL
+        
+        Read the robots.txt content from the given URL.
+        
+        Parameters:
+        - url: The URL of the robots.txt file.
+        
+        Returns:
+        - The content of the robots.txt file if found, None otherwise.
+        """
+        try:
+            with closing(urllib.request.urlopen(url)) as f:
+                raw = f.read()
+                return raw.decode("utf-8")
+        except Exception as e:
+            print(f"Error: {e}")
+            return None
 
     def can_fetch(self, url, user_agent="*"):
         """Get verdict for a URL, user-agent combination
@@ -101,26 +116,55 @@ class RobotsTxtParser:
         Returns:
         - True if the URL is allowed to be fetched, False otherwise.
         """
+        can_fetch = False
         robots_url = robots_location(url)
         robots_from_cache = self.read_from_cache(robots_url)
         if robots_from_cache:
-            self.parser.parse(robots_from_cache.splitlines())
+            self._parser = Protego.parse(robots_from_cache)
+            can_fetch = self._parser.can_fetch(user_agent, url)
         else:
-            self.parser.set_url(robots_url)
-            self.parser.read()
-            self.robot_cache.put(robots_url, self.parser.robots_content)
-        return self.parser.can_fetch(user_agent, url)
-    
-    def get_sitemaps(self) -> list[str]:
-        """Get list of sitemaps
-        
-        Get a list of sitemap URLs specified in the robots.txt file.
+            self.robots_content = self.read_from_url(robots_url)
+            if self.robots_content:
+                self._parser = Protego.parse(self.robots_content)
+                self.robot_cache.put(robots_url, self.robots_content)
+                can_fetch = self._parser.can_fetch(user_agent, url)
+            else:
+                print(f"Error: robots.txt not found at {robots_url}")
+                can_fetch = False
+        return can_fetch
+
+    @property
+    def sitemaps(self):
+        """Get sitemaps from robots.txt
         
         Returns:
         - A list of sitemap URLs.
         """
-        return self.parser.site_maps()
+        return self._parser.sitemaps
+
+    @property
+    def crawl_delay(self, user_agent="*"):
+        """Get crawl delay from robots.txt
+        
+        Parameters:
+        - user_agent: The user agent string. Default is "*".
+        
+        Returns:
+        - The crawl delay in seconds.
+        """
+        return self._parser.crawl_delay(user_agent)
     
+    @property
+    def request_rate(self, user_agent="*"):
+        """Get request rate from robots.txt
+        
+        Parameters:
+        - user_agent: The user agent string. Default is "*".
+        
+        Returns:
+        - The request rate in seconds.
+        """
+        return self._parser.request_rate(user_agent)
 
 def robots_location(url) -> str:
     """Get the presumed location of robots.txt
@@ -142,11 +186,15 @@ def robots_location(url) -> str:
 
 if __name__ == "__main__":
     
-    url = "https://aws.amazon.com/partners/work-with-partners/?nc2=h_ql_pa_wwap_cp"
+    #url = "https://aws.amazon.com/partners/work-with-partners/?nc2=h_ql_pa_wwap_cp"
+    url = "https://www.google.com"
     db = CuppyDatabase("cuppy-dev.db")
     db.connect()
     rp = RobotsTxtParser(db)
     print(rp.can_fetch(url, "*"))
-    print(rp.get_sitemaps())
+    print(rp.crawl_delay("*")) 
+    for s in rp.sitemaps:
+        print(s)
+    
     db.disconnect()
     
