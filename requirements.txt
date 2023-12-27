@@ -1,2 +1,4 @@
-protego==0.3.0
+beautifulsoup4==4.12.2
+lxml==4.9.4
+Protego==0.3.0
 requests==2.31.0

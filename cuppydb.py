@@ -65,7 +65,7 @@ if __name__ == "__main__":
         canonical_url_html TEXT,
         og_url TEXT,
         og_title TEXT,
-        description TEXT)
+        description TEXT, clean_text TEXT)
     """
     db.execute_query(create_urls_table_query)
 
@@ -81,9 +81,10 @@ if __name__ == "__main__":
         ,og_url
         ,og_title
         ,description
+        ,clean_text)
         )
      VALUES ("https://www.google.com", NULL, 200, CURRENT_TIMESTAMP, "Google", 
-     NULL, "https://www.google.com", NULL, NULL)
+     NULL, "https://www.google.com", NULL, NULL, NULL)
       ON CONFLICT(url) DO UPDATE 
      SET etag=?, status_code=?, timestamp=CURRENT_TIMESTAMP, title=?, canonical_url_header=?, canonical_url_html=?;"""
     

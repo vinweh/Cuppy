@@ -5,10 +5,11 @@ import requests
 from cuphtmlparser import CupHTMLParser
 from cuppydb import CuppyDatabase
 from robotsparser import RobotsTxtParser
+from htmlcleaner import HTMLCleaner
 
 
-class CanonicalUrlParser:
-    """Class to parse a list of URLs and extract canonical URL from headers and/or HTML content"""
+class WebpageParser:
+    """Class to parse a list of URLs and extract metadata and mores from headers and/or HTML content"""
     def __init__(self, urls: list[str], robotstxt: bool = False, force: bool = False):
 
         self.urls = urls
@@ -24,6 +25,7 @@ class CanonicalUrlParser:
         self.canonical_url_from_headers = None
         self.canonical_url_from_html = None
         self.description = None
+        self.clean_text = None
         self.db = CuppyDatabase("cuppy-dev.db")
         self.db.connect()
         self.success_count = 0
@@ -44,14 +46,13 @@ class CanonicalUrlParser:
         self.og_title = None
         self.og_url = None
         self.description = None
+        self.clean_text = None
+        self.html_parser = CupHTMLParser()
         
-        self.html_parser = MyHTMLParser()
   
-
     def parse(self):
         """Parse all URLs in list
         """
-        
         for url in self.urls:
             self.url = url
             self.parse_url()
@@ -68,15 +69,14 @@ class CanonicalUrlParser:
         else:
             return None
 
-
     def parse_url(self):
         """Parse a single URL"""
         self.get_webpage()
         if self.status_code == requests.codes.ok:
             self.get_canonical_from_headers()
-            self.get_canonical_and_og_from_html()
-        
-       
+            self.get_metadata_from_html()
+            self.get_clean_text()
+         
     def get_webpage(self):
         """Get webpage and store status code, content and headers"""
         print(f"Getting webpage: {self.url}")
@@ -125,20 +125,26 @@ class CanonicalUrlParser:
             for link in links:
                 if link.find("canonical") > -1:
                     self.canonical_url_from_headers = link.split(";")[0].strip("<>")
-            
-        
-    def get_canonical_and_og_from_html(self):
-        """Extract canonical URL and og:url from HTML content"""
+                   
+    def get_metadata_from_html(self):
+        """Extract meta data from HTML content"""
         if self.content:
             html = self.content.decode("utf-8")
             self.html_parser.feed(html)
-            if self.html_parser.canonical_url:
-                self.canonical_url_from_html = self.html_parser.canonical_url
-            if self.html_parser.og_url:
-                self.og_url = self.html_parser.og_url    
+            self.canonical_url_from_html = self.html_parser.canonical_url
+            self.og_url = self.html_parser.og_url    
             self.title = self.html_parser.title
             self.og_url = self.html_parser.og_url
             self.description = self.html_parser.description
+           
+        else:
+            print(f"Error: no HTML content")
+
+    def get_clean_text(self):
+        """Get clean text from HTML content"""
+        if self.content:
+            html = self.content.decode("utf-8")
+            self.clean_text = HTMLCleaner.stripped(html)
         else:
             print(f"Error: no HTML content")
     
@@ -147,8 +153,8 @@ class CanonicalUrlParser:
         if self.status_code == requests.codes.ok: #for now
             insert_data_query = """
             INSERT INTO urls (url, etag, status_code, timestamp, title, canonical_url_header
-            , canonical_url_html, og_url, og_title, description)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?)
+            , canonical_url_html, og_url, og_title, description, clean_text)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(url) DO UPDATE SET 
                 etag = ?,
                 status_code = ?,
@@ -158,7 +164,8 @@ class CanonicalUrlParser:
                 canonical_url_html = ?,
                 og_url = ?,
                 og_title = ?,
-                description = ?
+                description = ?,
+                clean_text = ?
             WHERE url = ?;
             """
             data = (
@@ -171,6 +178,7 @@ class CanonicalUrlParser:
                 self.og_url,
                 self.og_title,
                 self.description,
+                self.clean_text,
                 self.etag,
                 self.status_code,
                 self.title,
@@ -179,6 +187,7 @@ class CanonicalUrlParser:
                 self.og_url,
                 self.og_title,
                 self.description,
+                self.clean_text,
                 self.url
             )
             self.db.execute_query(insert_data_query, data)
@@ -211,11 +220,11 @@ def main(url_file: str, robotstxt: bool = False, force: bool = False):
     :param url_file: file containing URLs, one per line
     """
     urls = get_urls_from_file(url_file)
-    cup  = CanonicalUrlParser(urls
-                              ,robotstxt=robotstxt
-                              ,force=force)
+    cup  = WebpageParser(urls
+                        ,robotstxt=robotstxt
+                        ,force=force)
     cup.parse()
-    return 0
+    
 
 if __name__ == "__main__":
 

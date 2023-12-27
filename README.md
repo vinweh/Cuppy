@@ -12,6 +12,7 @@ of web content (text/html). Given a list of URLs, cuppy's webparser.py will extr
 - og:url
 - og:title
 - description (from meta name="description")
+- clean text: basic text extracted from the HTML document
 
 Results are stored in a sqllite3 database in the urls table. For efficiency Cuppy supports etags to see if the content has been modified.
 
@@ -22,6 +23,6 @@ With -f or --force, Cuppy will ignore etag when requesting content, forcing a re
 ## Requirements
 
 - Python 3.8+
-- requirements.txt: requests, protego
+- requirements.txt lists all necessary modules to install
 
 
