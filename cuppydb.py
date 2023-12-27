@@ -1,6 +1,7 @@
 import sqlite3
 
 class CuppyDatabase:
+    """Class to connect to the database and execute queries"""
     def __init__(self, db_file):
         self.db_file = db_file
         self.connection = None
@@ -63,7 +64,8 @@ if __name__ == "__main__":
         canonical_url_header TEXT,
         canonical_url_html TEXT,
         og_url TEXT,
-        og_title TEXT)
+        og_title TEXT,
+        description TEXT)
     """
     db.execute_query(create_urls_table_query)
 
@@ -78,6 +80,7 @@ if __name__ == "__main__":
         ,canonical_url_html
         ,og_url
         ,og_title
+        ,description
         )
      VALUES ("https://www.google.com", NULL, 200, CURRENT_TIMESTAMP, "Google", 
      NULL, "https://www.google.com", NULL, NULL)

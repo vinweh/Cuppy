@@ -2,61 +2,20 @@ import os, sys
 import argparse
 from urllib.parse import urlparse
 import requests
-from html.parser import HTMLParser
+from cuphtmlparser import CupHTMLParser
 from cuppydb import CuppyDatabase
 from robotsparser import RobotsTxtParser
 
 
-class MyHTMLParser(HTMLParser):
-    """HTML parser to extract canonical URL from HTML content"""
-    def __init__(self):
-        super().__init__()
-        self.canonical_url = None
-        self.og_url = None
-        self.og_title = None
-        self.in_title = False
-        self.in_head = False
-        self.title = None
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag == "link":
-            attrs_dict = dict(attrs)
-            if attrs_dict.get("rel") == "canonical":
-                self.canonical_url = attrs_dict.get("href") 
-        if tag == "meta":
-            attrs_dict = dict(attrs)
-            if attrs_dict.get("property") == "og:url":
-                self.og_url = attrs_dict.get("content")
-            if attrs_dict.get("name") == "og:title":
-                self.og_title = attrs_dict.get("content")    
-
-        if tag == "head":
-            self.in_head = True
-
-        if tag == "title":
-            self.in_title = True
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag == "head":
-            self.in_head = False
-        if tag == "title":
-            self.in_title = False
-
-    def handle_data(self, data: str) -> None:
-        if self.in_title and self.in_head:
-            self.title = data
-            print(f"Title: {self.title}")     
-      
-
 class CanonicalUrlParser:
     """Class to parse a list of URLs and extract canonical URL from headers and/or HTML content"""
-    def __init__(self, urls: list[str], robotstxt: bool = False):
+    def __init__(self, urls: list[str], robotstxt: bool = False, force: bool = False):
 
         self.urls = urls
         self.url = None
         self.etag = None
         self.status_code = None
-        self.html_parser = MyHTMLParser()
+        self.html_parser = CupHTMLParser()
         self.content = None
         self.headers = None
         self.title = None
@@ -64,11 +23,13 @@ class CanonicalUrlParser:
         self.og_title = None
         self.canonical_url_from_headers = None
         self.canonical_url_from_html = None
+        self.description = None
         self.db = CuppyDatabase("cuppy-dev.db")
         self.db.connect()
         self.success_count = 0
         self.run_id = None
         self.robotstxt = robotstxt
+        self.force = force
         self.user_agent = os.environ.get("USER_AGENT", "CUPPy/0.1")
 
     def reset(self):
@@ -76,12 +37,14 @@ class CanonicalUrlParser:
         self.etag = None
         self.content = None
         self.headers = None
+        self.status_code = None
         self.title = None
         self.canonical_url_from_headers = None
         self.canonical_url_from_html = None
         self.og_title = None
         self.og_url = None
-        self.status_code = None
+        self.description = None
+        
         self.html_parser = MyHTMLParser()
   
 
@@ -96,7 +59,7 @@ class CanonicalUrlParser:
             self.reset() # reset attributes for next URL
     
     def get_etag_from_cache(self):
-        
+        """Get etag from the database/cache""" 
         select_data_query = """
         SELECT etag FROM urls WHERE url = ?;"""
         row = self.db.fetch_one(select_data_query, (self.url,))
@@ -110,7 +73,6 @@ class CanonicalUrlParser:
         """Parse a single URL"""
         self.get_webpage()
         if self.status_code == requests.codes.ok:
-
             self.get_canonical_from_headers()
             self.get_canonical_and_og_from_html()
         
@@ -122,10 +84,14 @@ class CanonicalUrlParser:
         headers = {'user-agent': self.user_agent
                    ,'Accept' : 'text/html'}
         
-        cached_etag = self.get_etag_from_cache()
-        if cached_etag:
-            headers['If-None-Match'] = cached_etag
-                   
+        if not self.force:
+            cached_etag = self.get_etag_from_cache()
+            if cached_etag:
+                headers['If-None-Match'] = cached_etag
+                print(f"Using cached etag: {cached_etag}")
+        else:
+            print("Forcing refetch, not looking for cached etag (if any)")
+                    
         if self.robotstxt:
             rp = RobotsTxtParser(self.db)
             if rp.can_fetch(self.url, '*'):
@@ -142,7 +108,7 @@ class CanonicalUrlParser:
                 print(f"Success: status code {self.status_code}")
                 self.content = r.content
                 self.headers = r.headers
-            elif self.status_code == requests.codes.not_modified:
+            elif not self.force and self.status_code == requests.codes.not_modified:
                 print(f"Not modified: status code {self.status_code}")
             else:
                 print(f"Error: status code {self.status_code}")
@@ -172,6 +138,7 @@ class CanonicalUrlParser:
                 self.og_url = self.html_parser.og_url    
             self.title = self.html_parser.title
             self.og_url = self.html_parser.og_url
+            self.description = self.html_parser.description
         else:
             print(f"Error: no HTML content")
     
@@ -180,8 +147,8 @@ class CanonicalUrlParser:
         if self.status_code == requests.codes.ok: #for now
             insert_data_query = """
             INSERT INTO urls (url, etag, status_code, timestamp, title, canonical_url_header
-            , canonical_url_html, og_url, og_title)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?)
+            , canonical_url_html, og_url, og_title, description)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(url) DO UPDATE SET 
                 etag = ?,
                 status_code = ?,
@@ -190,7 +157,8 @@ class CanonicalUrlParser:
                 canonical_url_header = ?,
                 canonical_url_html = ?,
                 og_url = ?,
-                og_title = ?
+                og_title = ?,
+                description = ?
             WHERE url = ?;
             """
             data = (
@@ -202,6 +170,7 @@ class CanonicalUrlParser:
                 self.canonical_url_from_html,
                 self.og_url,
                 self.og_title,
+                self.description,
                 self.etag,
                 self.status_code,
                 self.title,
@@ -209,6 +178,7 @@ class CanonicalUrlParser:
                 self.canonical_url_from_html,
                 self.og_url,
                 self.og_title,
+                self.description,
                 self.url
             )
             self.db.execute_query(insert_data_query, data)
@@ -219,7 +189,6 @@ class CanonicalUrlParser:
             # to do error table 
             print(f"Error: status code {self.status_code}")
         
-        #self.reset()
         
         
 def get_urls_from_file(filename: str) -> list[str]:
@@ -237,12 +206,14 @@ def is_valid_url(url: str) -> bool:
         return False
     
     
-def main(url_file: str, robotstxt: bool = False):
+def main(url_file: str, robotstxt: bool = False, force: bool = False):
     """Main function
     :param url_file: file containing URLs, one per line
     """
     urls = get_urls_from_file(url_file)
-    cup  = CanonicalUrlParser(urls, robotstxt=robotstxt)
+    cup  = CanonicalUrlParser(urls
+                              ,robotstxt=robotstxt
+                              ,force=force)
     cup.parse()
     return 0
 
@@ -253,5 +224,7 @@ if __name__ == "__main__":
                            , help="File containing URLs, one per line.")
     argparser.add_argument("-r", "--robotstxt", action="store_true"
                            , help="Check robots.txt before parsing URL")
+    argparser.add_argument("-f", "--force", action="store_true"
+                           , help="Force refetch of URL even if etag matches")
     args = argparser.parse_args()
-    sys.exit(main(args.url_file, robotstxt=args.robotstxt))
+    sys.exit(main(args.url_file, robotstxt=args.robotstxt, force=args.force))
