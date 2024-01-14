@@ -144,7 +144,7 @@ class WebpageParser:
         """Get clean text from HTML content"""
         if self.content:
             html = self.content.decode("utf-8")
-            self.clean_text = HTMLCleaner.stripped(html)
+            self.clean_text = HTMLCleaner.clean_text(html)
         else:
             print(f"Error: no HTML content")
     
