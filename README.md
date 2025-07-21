@@ -14,7 +14,7 @@ of web content (text/html). Given a list of URLs, cuppy's webparser.py will extr
 - description (from meta name="description")
 - clean text: basic text extracted from the HTML document
 
-Results are stored in a sqllite3 database in the urls table. For efficiency Cuppy supports etags to see if the content has been modified.
+Results are stored in a sqlite3 database in the urls table. For efficiency Cuppy supports etags to see if the content has been modified.
 
 With -r or --robotstxt Cuppy observes robots.txt to see if it can/cannot fetch the URL. Robots.txt are stored in the robots_txt table and can be refetched from there.
 
