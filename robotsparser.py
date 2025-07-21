@@ -142,25 +142,23 @@ class RobotsTxtParser:
         """
         return self._parser.sitemaps
 
-    @property
     def crawl_delay(self, user_agent="*"):
-        """Get crawl delay from robots.txt
-        
+        """Return the crawl delay for the provided user agent.
+
         Parameters:
-        - user_agent: The user agent string. Default is "*".
-        
+        - user_agent: The user agent string. Defaults to "*".
+
         Returns:
         - The crawl delay in seconds.
         """
         return self._parser.crawl_delay(user_agent)
     
-    @property
     def request_rate(self, user_agent="*"):
-        """Get request rate from robots.txt
-        
+        """Return the request rate for the provided user agent.
+
         Parameters:
-        - user_agent: The user agent string. Default is "*".
-        
+        - user_agent: The user agent string. Defaults to "*".
+
         Returns:
         - The request rate in seconds.
         """
