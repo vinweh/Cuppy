@@ -168,13 +168,12 @@ class RobotsTxtParser:
 
 def robots_location(url) -> str:
     """Get the presumed location of robots.txt
-    
-    Get the presumed location of the robots.txt file based on the given URL.
-    
+
+    Determine the URL of the ``robots.txt`` file for the provided address.
+
     Parameters:
     - url: The URL for which the robots.txt location is determined.
-    - root: Whether to include the root URL in the result. Default is False.
-    
+
     Returns:
     - The presumed location of the robots.txt file.
     """
